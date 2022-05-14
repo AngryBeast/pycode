@@ -116,6 +116,7 @@ def main():
             Ser.SerialSendData('AS')
             reachFlag = True
         else:
+            #二分查找路径规划
             print('not reach')
 
         if reachFlag == False:          #未到达Target

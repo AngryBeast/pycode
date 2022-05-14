@@ -5,7 +5,7 @@ import re
 
 
 HOST = '127.0.0.1'
-PORT = 7799
+PORT = 12345
 BUFSIZ = 1024
 ADDRESS = (HOST, PORT)
 
@@ -28,31 +28,31 @@ while True:
     data, ADDR = tcpClientSocket.recvfrom(BUFSIZ)
     if not data:
         break
-    revstr = data.decode().split('!')
-    for num in revstr:
-        floatnum = re.findall(r"\d+\.?\d*",num)
-        if (len(floatnum) == 4):
-            tempNum = int(floatnum[0])
-            if (tempNum == point_cloud_data[tempNum][0]):
-                count += 1
-                resultx = float(floatnum[1])
-                resulty = float(floatnum[2])
-                resultz = float(floatnum[3])
-                point_cloud_data[tempNum] = (tempNum, resultx, resulty, resultz)
+    # revstr = data.decode().split('!')
+    # for num in revstr:
+    #     floatnum = re.findall(r"\d+\.?\d*",num)
+    #     if (len(floatnum) == 4):
+    #         tempNum = int(floatnum[0])
+    #         if (tempNum == point_cloud_data[tempNum][0]):
+    #             count += 1
+    #             resultx = float(floatnum[1])
+    #             resulty = float(floatnum[2])
+    #             resultz = float(floatnum[3])
+    #             point_cloud_data[tempNum] = (tempNum, resultx, resulty, resultz)
 
-                # point_cloud_data[tempNum] = np.array([tempNum, resultx,resulty, resultz])           
-                # point_cloud_data[tempNum][1] = float(floatnum[1]) 
-                # point_cloud_data[tempNum][2] = float(floatnum[2]) 
-                # point_cloud_data[tempNum][3] = float(floatnum[3]) 
+    #             # point_cloud_data[tempNum] = np.array([tempNum, resultx,resulty, resultz])           
+    #             # point_cloud_data[tempNum][1] = float(floatnum[1]) 
+    #             # point_cloud_data[tempNum][2] = float(floatnum[2]) 
+    #             # point_cloud_data[tempNum][3] = float(floatnum[3]) 
 
-                if (count == 9599):
-                    i+=1
-                    count = 0
-                    print(i,'done')
-            else:
-                count = 0
-        else:
-            print('loss')
+    #             if (count == 9599):
+    #                 i+=1
+    #                 count = 0
+    #                 print(i,'done')
+    #         else:
+    #             count = 0
+    #     else:
+    #         print('loss')
 
 print("链接已断开！")
 tcpClientSocket.close()

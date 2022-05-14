@@ -33,19 +33,29 @@
 # import serial
 
 # ted = serial.Serial(port="/dev/ttyAMA1", baudrate=9600)
-# ted.write("Hello World".encode("gbk"))
-# ted.read(11)
+# ted.write("AS\n".encode("gbk"))
 
 import serial
 import time
 import sys
+import os
 
 def main():
     i = 0
     while True:
-        ser.write("AG\n".encode("gbk"))
+        # msg = input()
+        # msg += '\n'
+        # ser.write(msg.encode("gbk"))
+        # ser.flushInput()
+        #time.sleep(1)
+        # msg = input()
+        # msg += '\n'
+        # ser.write(msg.encode("gbk"))
+        # ser.write("AG\n".encode("gbk"))
+        # time.sleep(0.05)
+        # ser.write("AS\n".encode("gbk"))
+        # time.sleep(0.05)
         ser.flushInput()
-        time.sleep(1)
 
 
 if __name__ == '__main__':
@@ -54,7 +64,7 @@ if __name__ == '__main__':
         if ser.isOpen == False:
             ser.open()
         #ser.write(b"AG")
-        ser.write("AG\n".encode("gbk"))
+        ser.write("AS\n".encode("gbk"))
         main()
     except KeyboardInterrupt:
         if ser != None:
