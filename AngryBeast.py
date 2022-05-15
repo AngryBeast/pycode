@@ -7,7 +7,13 @@ import threading
 import time
 import numpy as np
 import random
+import math
 
+
+deep_data = np.zeros((60,160),dtype = int)
+lock = Lock()
+SendNumLeft = [40,-20,50,-20]
+SendNumRight = [-20,40,-20,50]
 #串口发送类
 class MySerial:
     def __init__(self):
@@ -36,6 +42,14 @@ class MySerial:
                     num = -num
                 msg += chr(num + 41)
             SerialSendData(msg)
+
+    def TurnAngle(self,angle):
+        if (angle < 0):
+            SendDuty(SendNumLeft)
+        else:
+            SendDuty(SendNumRight)
+        time.sleep(angle * 0.00555)
+
 
 #TCP连接， 接收TCP消息
 class MyTCPClient:
@@ -97,10 +111,17 @@ class MyDataProcess:
         return True
     
     def JudgeDirection(self, CarLoca, TargetLoca):
-        if (TargetLoca.x > CarLoca.x):
-            if (TargetLoca.y > CarLoca.y):
-                print('test')
-        
+        dx1 = TargetLoca.x - CarLoca.x
+        dy1 = TargetLoca.y - CarLoca.Y
+        angle = math.atan2(dx1, dy1)
+        angle = int(angle * 180/math.pi)
+        return angle
+
+    def LeidaJudgeData(self):
+        lock.acquire()
+        lock.release()
+
+
 class MyQtThread(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
@@ -110,7 +131,7 @@ class MyQtThread(threading.Thread):
         self.TargetLocation = LocationStruct('Target', 0.0, 0.0, 0.0)
         self.StartLocation = LocationStruct('Start', 0.0, 0.0, 0.0)
         self.DataPro = MyDataProcess()
-        self.reachFlag = True
+        self.angle = 0
 
     def run(self):
         while True:
@@ -118,20 +139,26 @@ class MyQtThread(threading.Thread):
             print(reciveData)
             if self.DataPro.UpdateLocation(reciveData, self.CarLocation, self.TargetLocation) == True: #返回TRUE 代表 Target改变
                 self.CarLocation.printSelfData()
-                self.reachFlag = False  #已更新Target,需再次判断是否到达
 
             if self.DataPro.CheakIfReach(self.CarLocation, self.TargetLocation) == True:     #已到达Target
                 self.Ser.SerialSendData('S')
-                self.reachFlag = True
+                self.StartLocation = self.CarLocation
             else:
                 #进行路径规划
                 #发送小车路径指令
                 print('not reach')
+                needAngle = JudgeDirection(self.CarLocation, self.TargetLocation)
+                if (abs(needAngle - self.angle) > 5):
+                    self.Ser.TurnAngle(needAngle - self.angle)
+                
+                #LeidaJudgeData()
                 SendNum = [40,40,40,40]
                 self.Ser.SendDuty(SendNum)
+                # SendNum = [40,40,40,40]
+                # self.Ser.SendDuty(SendNum)
 
-            if self.reachFlag == False:          #未到达Target
-                self.Ser.SerialSendData(reciveData)
+            # if self.reachFlag == False:          #未到达Target
+            #     self.Ser.SerialSendData(reciveData)
 
 
 class MyTcpThread(threading.Thread):
@@ -139,7 +166,7 @@ class MyTcpThread(threading.Thread):
         threading.Thread.__init__(self)
         ADDRESS = ('127.0.0.1', 12345)
         self.BUFSIZ = 102400
-        self.deep_data = np.zeros((60,160),dtype = int)
+        # self.deep_data = np.zeros((60,160),dtype = int)
         self.tcpClientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.tcpClientSocket.connect(ADDRESS)
 
@@ -149,20 +176,22 @@ class MyTcpThread(threading.Thread):
             if not data:
                 break
             revstr = data.decode().split('!')
+
             for num in revstr:
                 floatnum = re.findall(r"\d+\.?\d*",num)
                 if (len(floatnum) == 2):
+                    lock.acquire()
                     tempNum = int(floatnum[0])
                     deep_data[int(tempNum/160)][tempNum%160] = floatnum[1]
                     lastNum = tempNum
-                    
+                    lock.release()
                     if (tempNum == 9599):
                         print('done')
 
 def main():
     threadQt = MyQtThread()
-    threadTcp = MyTcpThread()
-    threadTcp.start()
+    #threadTcp = MyTcpThread()
+    #threadTcp.start()
     threadQt.start()
     
 

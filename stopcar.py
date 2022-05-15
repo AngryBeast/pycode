@@ -20,7 +20,7 @@ ted = serial.Serial(port="/dev/ttyAMA1", baudrate=9600)
 # msg = getMsg(SendNum)
 # ted.write(msg.encode("gbk"))
 # time.sleep(3)
-#0.5S 90度
+#0.5S 90度  0.27 45度
 SendNum = [40,-20,50,-20]
 msg = getMsg(SendNum)
 ted.write(msg.encode("gbk"))
