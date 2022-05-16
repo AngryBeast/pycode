@@ -7,5 +7,7 @@
 			"path": "../new/HPS3D_SDK_Linux_Demo"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"makefile.extensionOutputFolder": "./.vscode"
+	}
 }

@@ -127,6 +127,8 @@ class MyDataProcess:
 
     def LeidaJudgeData(self):
         lock.acquire()
+        for i in range(60):
+            print(deep_data[i])
         lock.release()
 
 
@@ -170,7 +172,7 @@ class MyQtThread(threading.Thread):
                         self.angle = needAngle
                     
                     if debugLeida == 1:
-                        #LeidaJudgeData()
+                        self.DataPro.LeidaJudgeData()
                     SendNum = [40,40,40,40]
                     tempData = [20,20,20,20]
                     self.Ser.SendDuty(tempData)
@@ -207,8 +209,8 @@ class MyTcpThread(threading.Thread):
 def main():
     threadQt = MyQtThread()
     if debugLeida == 1:
-        #threadTcp = MyTcpThread()
-        #threadTcp.start()
+        threadTcp = MyTcpThread()
+        threadTcp.start()
     threadQt.start()
     
 
