@@ -11,9 +11,12 @@ import math
 
 
 deep_data = np.zeros((60,160),dtype = int)
-lock = Lock()
+lock = threading.Lock()
 SendNumLeft = [40,-20,50,-20]
 SendNumRight = [-20,40,-20,50]
+
+debugLeida = 1
+
 #串口发送类
 class MySerial:
     def __init__(self):
@@ -34,21 +37,20 @@ class MySerial:
         if len(SendData) == 4:
             msg = 'A' 
             for num in SendData:
-                print(num)
                 if num >= 0:
                     msg += '+'
                 else:
                     msg += '-'
                     num = -num
                 msg += chr(num + 41)
-            SerialSendData(msg)
+            self.SerialSendData(msg)
 
     def TurnAngle(self,angle):
         if (angle < 0):
-            SendDuty(SendNumLeft)
+            self.SendDuty(SendNumLeft)
         else:
-            SendDuty(SendNumRight)
-        time.sleep(angle * 0.00555)
+            self.SendDuty(SendNumRight)
+        time.sleep(abs(angle) * 0.00555)
 
 
 #TCP连接， 接收TCP消息
@@ -87,23 +89,29 @@ class MyDataProcess:
 
     def UpdateLocation(self, Recvdata, CarLoca, TargetLoca):
         if Recvdata.find('T:') != -1: #目标坐标信息
-            x = re.findall(r"\d+\.?\d*",Recvdata)
+            x = re.findall(r'-?\d+\.?\d*',Recvdata)
             if TargetLoca.name == 'Target':
                 TargetLoca.x = float(x[0])
                 TargetLoca.y = float(x[1])
                 TargetLoca.z = float(x[2])
-                TargetLoca.printSelfData()
+                #TargetLoca.printSelfData()
             return True
         if Recvdata.find('D:') != -1: #标签坐标信息
-            x = re.findall(r"\d+\.?\d*",Recvdata)
+            x = re.findall(r"-?\d+\.?\d*",Recvdata)
             if CarLoca.name == 'car':
                 CarLoca.x = float(x[0])
                 CarLoca.y = float(x[1])
                 CarLoca.z = float(x[2])
-                CarLoca.printSelfData()
+                #CarLoca.printSelfData()
             return False
-    
-    def CheakIfReach(self, CarLoca, TargetLoca, precision = 0.015): #判断是否到达Targe
+
+        if Recvdata.find('S') != -1:
+            TargetLoca.x = CarLoca.x
+            TargetLoca.y = CarLoca.y
+            TargetLoca.z = CarLoca.z
+            return False
+
+    def CheakIfReach(self, CarLoca, TargetLoca, precision = 0.10): #判断是否到达Targe
         if abs(CarLoca.x - TargetLoca.x) > precision:
             return False
         if abs(CarLoca.y - TargetLoca.y) > precision:
@@ -112,7 +120,7 @@ class MyDataProcess:
     
     def JudgeDirection(self, CarLoca, TargetLoca):
         dx1 = TargetLoca.x - CarLoca.x
-        dy1 = TargetLoca.y - CarLoca.Y
+        dy1 = TargetLoca.y - CarLoca.y
         angle = math.atan2(dx1, dy1)
         angle = int(angle * 180/math.pi)
         return angle
@@ -130,35 +138,43 @@ class MyQtThread(threading.Thread):
         self.CarLocation = LocationStruct('car', 0.0, 0.0, 0.0)
         self.TargetLocation = LocationStruct('Target', 0.0, 0.0, 0.0)
         self.StartLocation = LocationStruct('Start', 0.0, 0.0, 0.0)
+        self.RecvTargetFlag = False
         self.DataPro = MyDataProcess()
         self.angle = 0
 
     def run(self):
+        self.Ser.SerialSendData('S')
         while True:
             reciveData = self.TCPC.TCPreceiveData()
-            print(reciveData)
+            #print(reciveData)
             if self.DataPro.UpdateLocation(reciveData, self.CarLocation, self.TargetLocation) == True: #返回TRUE 代表 Target改变
                 self.CarLocation.printSelfData()
-
-            if self.DataPro.CheakIfReach(self.CarLocation, self.TargetLocation) == True:     #已到达Target
+                self.StartLocation = self.CarLocation
+                self.RecvTargetFlag = True
+            self.CarLocation.printSelfData()
+            self.TargetLocation.printSelfData()
+            if self.DataPro.CheakIfReach(self.CarLocation, self.TargetLocation,0.2) == True:     #已到达Target
                 self.Ser.SerialSendData('S')
                 self.StartLocation = self.CarLocation
+                self.RecvTargetFlag = False
+
             else:
                 #进行路径规划
                 #发送小车路径指令
-                print('not reach')
-                needAngle = JudgeDirection(self.CarLocation, self.TargetLocation)
-                if (abs(needAngle - self.angle) > 5):
-                    self.Ser.TurnAngle(needAngle - self.angle)
-                
-                #LeidaJudgeData()
-                SendNum = [40,40,40,40]
-                self.Ser.SendDuty(SendNum)
-                # SendNum = [40,40,40,40]
-                # self.Ser.SendDuty(SendNum)
+                if self.RecvTargetFlag == True:
+                    print('not reach')
+                    needAngle = self.DataPro.JudgeDirection(self.CarLocation, self.TargetLocation)
+                    print(needAngle)
+                    if (abs(needAngle - self.angle) > 5):
+                        self.Ser.TurnAngle(needAngle - self.angle)
+                        self.angle = needAngle
+                    
+                    if debugLeida == 1:
+                        #LeidaJudgeData()
+                    SendNum = [40,40,40,40]
+                    tempData = [20,20,20,20]
+                    self.Ser.SendDuty(tempData)
 
-            # if self.reachFlag == False:          #未到达Target
-            #     self.Ser.SerialSendData(reciveData)
 
 
 class MyTcpThread(threading.Thread):
@@ -190,8 +206,9 @@ class MyTcpThread(threading.Thread):
 
 def main():
     threadQt = MyQtThread()
-    #threadTcp = MyTcpThread()
-    #threadTcp.start()
+    if debugLeida == 1:
+        #threadTcp = MyTcpThread()
+        #threadTcp.start()
     threadQt.start()
     
 
