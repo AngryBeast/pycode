@@ -14,7 +14,9 @@ deep_data = np.zeros((60,160),dtype = int)
 lock = threading.Lock()
 SendNumLeft = [40,-20,50,-20]
 SendNumRight = [-20,40,-20,50]
-
+SendNumBack = [-40,-40,-40,-40]
+SendNumSlow = [20,20,20,20]
+SendNumGo = [40,40,40,40]
 debugLeida = 1
 
 #串口发送类
@@ -125,11 +127,39 @@ class MyDataProcess:
         angle = int(angle * 180/math.pi)
         return angle
 
-    def LeidaJudgeData(self):
+    def LeidaJudgeData(self,MySerial, CarLoca, TargetLoca):
         lock.acquire()
-        for i in range(60):
-            print(deep_data[i])
-        lock.release()
+        deep_data_step1 = np.where(deep_data < 10000,deep_data,0)          #数组切片取最中间，且排除异常值或不考虑值
+        tempData = deep_data_step1[ 30:60 , 60:100]
+        print(tempData)
+        Precision = np.mean(tempData)
+        print(Precision)
+
+        if (Precision < 200):
+            print('go back')
+            MySerial.SendDuty(SendNumBack)
+            time.sleep(0.3)
+            lock.release()
+            return 0
+        if (Precision < 500):
+            if self.CheakIfReach(CarLoca, TargetLoca, 0.4) == False:
+                LeftData = deep_data_step1[30:60 , 30:60]
+                LeftPrecision = np.mean(LeftData)
+                RightData = deep_data_step1[30:60 , 100:130]
+                RightPrecision = np.mean(RightData)
+                if (LeftPrecision > RightPrecision):
+                    MySerial.TurnAngle(-30)
+                    print('T left')
+                    lock.release()
+                    return -30
+                else:
+                    MySerial.TurnAngle(30)
+                    print('T Right')
+                    lock.release()
+                    return 30
+        print('zhi zou')
+        lock.release() 
+        return 0
 
 
 class MyQtThread(threading.Thread):
@@ -150,7 +180,7 @@ class MyQtThread(threading.Thread):
             reciveData = self.TCPC.TCPreceiveData()
             #print(reciveData)
             if self.DataPro.UpdateLocation(reciveData, self.CarLocation, self.TargetLocation) == True: #返回TRUE 代表 Target改变
-                self.CarLocation.printSelfData()
+                #self.CarLocation.printSelfData()
                 self.StartLocation = self.CarLocation
                 self.RecvTargetFlag = True
             self.CarLocation.printSelfData()
@@ -160,22 +190,25 @@ class MyQtThread(threading.Thread):
                 self.StartLocation = self.CarLocation
                 self.RecvTargetFlag = False
 
-            else:
-                #进行路径规划
-                #发送小车路径指令
-                if self.RecvTargetFlag == True:
-                    print('not reach')
-                    needAngle = self.DataPro.JudgeDirection(self.CarLocation, self.TargetLocation)
-                    print(needAngle)
-                    if (abs(needAngle - self.angle) > 5):
-                        self.Ser.TurnAngle(needAngle - self.angle)
-                        self.angle = needAngle
+
+            if self.RecvTargetFlag == True:
+                #print('not reach')
+                needAngle = self.DataPro.JudgeDirection(self.CarLocation, self.TargetLocation)
+                #print(needAngle)
+                if (abs(needAngle - self.angle) > 5):
+                    self.Ser.TurnAngle(needAngle - self.angle)          #旋转所需角度
+                    self.angle = needAngle
+                
+                if debugLeida == 1:
+                    #print('judge leida')
+                    self.angle += self.DataPro.LeidaJudgeData(self.Ser, self.CarLocation, self.TargetLocation)
                     
-                    if debugLeida == 1:
-                        self.DataPro.LeidaJudgeData()
-                    SendNum = [40,40,40,40]
-                    tempData = [20,20,20,20]
-                    self.Ser.SendDuty(tempData)
+                SendNum = [40,40,40,40]
+                tempData = [20,20,20,20]
+                self.Ser.SendDuty(tempData)
+            time.sleep(0.1)    
+            
+            
 
 
 
@@ -203,8 +236,9 @@ class MyTcpThread(threading.Thread):
                     deep_data[int(tempNum/160)][tempNum%160] = floatnum[1]
                     lastNum = tempNum
                     lock.release()
-                    if (tempNum == 9599):
-                        print('done')
+                    # if (tempNum == 9599):
+                    #     print('done')
+            time.sleep(0.1)
 
 def main():
     threadQt = MyQtThread()
