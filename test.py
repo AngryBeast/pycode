@@ -234,7 +234,7 @@ class MyDataProcess:
                     return -30
                 else:
                     MySerial.TurnAngle(30)
-                   print('T Right')
+                    print('T Right')
                     lock.release()
                     return 30
         print('zhi zou')

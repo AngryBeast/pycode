@@ -17,7 +17,7 @@ SendNumRight = [-20,40,-20,50]
 SendNumBack = [-40,-40,-40,-40]
 SendNumSlow = [20,20,20,20]
 SendNumGo = [40,40,40,40]
-debugLeida = 1
+debugLeida = 0
 
 #串口发送类
 class MySerial:
@@ -88,6 +88,8 @@ class LocationStruct:
 class MyDataProcess:
     def __init__(self):
         self = self
+        self.MoveDataX = np.array([])
+        self.MoveDataY = np.array([])
 
     def UpdateLocation(self, Recvdata, CarLoca, TargetLoca):
         if Recvdata.find('T:') != -1: #目标坐标信息
@@ -126,6 +128,31 @@ class MyDataProcess:
         angle = math.atan2(dx1, dy1)
         angle = int(angle * 180/math.pi)
         return angle
+
+    def ClearLineFitData(self):
+        self.MoveDataX = np.array([])
+        self.MoveDataY = np.array([])
+
+    def lineFit(self, per, CarLoca):
+        if self.MoveDataX.size != per:
+            self.MoveDataX = np.append(self.MoveDataX,CarLoca.x)
+            self.MoveDataY = np.append(self.MoveDataY,CarLoca.y)
+        else:
+            self.MoveDataX = np.delete(self.MoveDataX, 0)
+            self.MoveDataY = np.delete(self.MoveDataY, 0)
+
+            self.MoveDataX = np.append(self.MoveDataX,CarLoca.x)
+            self.MoveDataY = np.append(self.MoveDataY,CarLoca.y)
+            A = np.stack((self.MoveDataX, np.ones(per)), axis=1)
+            b = np.array(self.MoveDataY).reshape((per, 1))
+            theta, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+            theta = theta.flatten()
+            k = theta[0]
+            b_ = theta[1]
+            #print("拟合结果为: y={:.4f}*x+{:.4f}".format(k, b_))
+            angle = np.degrees(np.arctan(k))
+            #print("计算出结果为",angle)
+            return angle
 
     def LeidaJudgeData(self,MySerial, CarLoca, TargetLoca):
         lock.acquire()
@@ -183,6 +210,7 @@ class MyQtThread(threading.Thread):
                 #self.CarLocation.printSelfData()
                 self.StartLocation = self.CarLocation
                 self.RecvTargetFlag = True
+                self.DataPro.ClearLineFitData()
             self.CarLocation.printSelfData()
             self.TargetLocation.printSelfData()
             if self.DataPro.CheakIfReach(self.CarLocation, self.TargetLocation,0.2) == True:     #已到达Target
@@ -190,14 +218,21 @@ class MyQtThread(threading.Thread):
                 self.StartLocation = self.CarLocation
                 self.RecvTargetFlag = False
 
-
+            
             if self.RecvTargetFlag == True:
                 #print('not reach')
                 needAngle = self.DataPro.JudgeDirection(self.CarLocation, self.TargetLocation)
+                GoAngle = self.DataPro.lineFit(10,self.CarLocation)
+
+                if (abs(GoAngle - self.angle) > 5):         #修正前进角度
+                    self.Ser.TurnAngle(GoAngle - self.angle)          
+                    self.angle = GoAngle
+                    
                 #print(needAngle)
                 if (abs(needAngle - self.angle) > 5):
                     self.Ser.TurnAngle(needAngle - self.angle)          #旋转所需角度
                     self.angle = needAngle
+                    self.DataPro.ClearLineFitData()
                 
                 if debugLeida == 1:
                     #print('judge leida')

@@ -1,3 +1,39 @@
-import numpy as np
-b = np.load("filename.npy")
-print(b.shape)
+
+import numpy as np 
+# import scipy.optimize as opt
+
+
+X = np.array([ 8.19, 2.72, 6.39, 8.71, 4.7 , 2.66, 3.78])
+Y = np.array([ 7.01, 2.78, 6.47, 6.71, 4.1 , 4.23, 4.05])
+
+
+SAMPLE_NUM = 7
+A = np.stack((X, np.ones(SAMPLE_NUM)), axis=1)
+
+b = np.array(Y).reshape((SAMPLE_NUM, 1))
+
+theta, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+# theta=np.polyfit(X,Y_noise,deg=1) 也可以换此函数来实现拟合X和Y_noise,注意deg为x的最高次幂，线性模型y=ax+b中，x最高次幂为1.
+# theta=np.linalg.solve(A,b) 不推荐使用
+theta = theta.flatten()
+a_ = theta[0]
+b_ = theta[1]
+print("拟合结果为: y={:.4f}*x+{:.4f}".format(a_, b_))
+
+for i in X:
+    print(i* a_ + b_)
+# for num in X:
+#     temp = X[0][num]
+#     print(temp * a_ + b_)
+# "计算以p为参数的直线和原始数据之间的残差"
+
+# def residuals(p): 
+#     k,b = p
+#     return Y - (k*X + b)
+# # l e a s t s q使得residuals()的输出数姐的平方和最小，参数的初始值为[1,0] 
+# def Arithmetic(self, per, CarLoca):
+#     if np.shape(x)[0] % per != 0:
+#         np.append([])
+# r = opt.leastsq(residuals, [1, 0]) 
+# k, b = r[0]
+# print ("k =" ,k, "b =" ,b)
