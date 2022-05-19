@@ -17,7 +17,7 @@ SendNumRight = [-20,40,-20,50]
 SendNumBack = [-40,-40,-40,-40]
 SendNumSlow = [20,20,20,20]
 SendNumGo = [40,40,40,40]
-debugLeida = 0
+debugLeida = 1
 debugCar = 1
 
 #串口发送类
@@ -130,6 +130,13 @@ class MyDataProcess:
             return False
         return True
     
+    def CheakAngleLegal(self, Angle):
+        if Angle > 180:
+            Angle = 180 - Angle
+        if Angle < -180:
+            Angle = -180 - Angle
+        return Angle
+
     def JudgeDirection(self, CarLoca, TargetLoca):
         dx1 = TargetLoca.x - CarLoca.x
         dy1 = TargetLoca.y - CarLoca.y
@@ -181,34 +188,36 @@ class MyDataProcess:
     def LeidaJudgeData(self,MySerial, CarLoca, TargetLoca):
         lock.acquire()
         deep_data_step1 = np.where(deep_data < 10000,deep_data,0)          #数组切片取最中间，且排除异常值或不考虑值
-        tempData = deep_data_step1[ 30:60 , 60:100]
-        print(tempData)
-        Precision = np.mean(tempData)
-        print(Precision)
+        if np.mean(deep_data_step1) > 30:#防止数组为空的状态
+            tempData = deep_data_step1[ 10:30 , 60:100]
+            print(tempData)
+            Precision = np.mean(tempData)
+            
+            print(Precision)
 
-        if (Precision < 200):
-            print('go back')
-            MySerial.SendDuty(SendNumBack)
-            time.sleep(0.3)
-            lock.release()
-            return 0
-        if (Precision < 500):
-            if self.CheakIfReach(CarLoca, TargetLoca, 0.4) == False:
-                LeftData = deep_data_step1[30:60 , 30:60]
-                LeftPrecision = np.mean(LeftData)
-                RightData = deep_data_step1[30:60 , 100:130]
-                RightPrecision = np.mean(RightData)
-                if (LeftPrecision > RightPrecision):
-                    MySerial.TurnAngle(-30)
-                    print('T left')
-                    lock.release()
-                    return -30
-                else:
-                    MySerial.TurnAngle(30)
-                    print('T Right')
-                    lock.release()
-                    return 30
-        print('zhi zou')
+            if (Precision < 300):
+                print('go back')
+                MySerial.SendDuty(SendNumBack)
+                time.sleep(0.3)
+                lock.release()
+                return 0
+            if (Precision < 650):
+                if self.CheakIfReach(CarLoca, TargetLoca, 0.4) == False:
+                    LeftData = deep_data_step1[10:30 , 30:60]
+                    LeftPrecision = np.mean(LeftData)
+                    RightData = deep_data_step1[10:30 , 100:130]
+                    RightPrecision = np.mean(RightData)
+                    if (LeftPrecision > RightPrecision):
+                        MySerial.TurnAngle(-30)
+                        print('T left')
+                        lock.release()
+                        return -30
+                    else:
+                        MySerial.TurnAngle(30)
+                        print('T Right')
+                        lock.release()
+                        return 30
+            print('zhi zou')
         lock.release() 
         return 0
 
@@ -230,6 +239,7 @@ class MyQtThread(threading.Thread):
         while True:
             reciveData = self.TCPC.TCPreceiveData()
             #print(reciveData)
+            self.Angle = self.DataPro.CheakAngleLegal(self.Angle)
             if self.DataPro.UpdateLocation(reciveData, self.CarLocation, self.TargetLocation) == True: #返回TRUE 代表 Target改变
                 #self.CarLocation.printSelfData()
                 self.StartLocation = self.CarLocation
@@ -247,7 +257,7 @@ class MyQtThread(threading.Thread):
                 #print('not reach')
                 needAngle = self.DataPro.JudgeDirection(self.CarLocation, self.TargetLocation)
                 print('need',needAngle)
-                GoAngle = self.DataPro.lineFit(5,0.3,self.CarLocation)
+                GoAngle = self.DataPro.lineFit(5,0.2,self.CarLocation)
                 if GoAngle != None:
                     print('Go',GoAngle)
                     TempAngle =  self.DataPro.CheackIfNeedTurn(GoAngle, self.angle)
