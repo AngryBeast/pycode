@@ -14,12 +14,12 @@ deep_data = np.zeros((60,160),dtype = int)
 lock = threading.Lock()
 SendNumLeft = [40,-20,50,-20]
 SendNumRight = [-20,40,-20,50]
-SendNumBack = [-40,-40,-40,-40]
+SendNumBack = [-20,-20,-20,-20]
 SendNumSlow = [20,20,20,20]
 SendNumGo = [40,40,40,40]
+SendNumStop = [0,0,0,0]
 debugLeida = 1
-debugCar = 0
-tempStopCar = 1
+debugCar = 1
 avoidFlag = 0
 
 #串口发送类
@@ -34,7 +34,7 @@ class MySerial:
                 self.ser.close()
 
     def SerialSendData(self,str): #发送数据
-        if debugCar == 1 and tempStopCar == 1:
+        if debugCar == 1:
             str += '\n'
             strData = str.encode("gbk")
             self.ser.write(strData)
@@ -109,7 +109,6 @@ class MyDataProcess:
                 TargetLoca.x = float(x[0])
                 TargetLoca.y = float(x[1])
                 TargetLoca.z = float(x[2])
-                tempStopCar = 1
                 #TargetLoca.printSelfData()
             return True
         if Recvdata.find('D:') != -1: #标签坐标信息
@@ -125,7 +124,6 @@ class MyDataProcess:
             TargetLoca.x = CarLoca.x
             TargetLoca.y = CarLoca.y
             TargetLoca.z = CarLoca.z
-            tempStopCar = 0
             return False
 
     # def CheakIfReach(self, CarLoca, TargetLoca, precision = 0.10): #判断是否到达Targe
@@ -197,7 +195,7 @@ class MyDataProcess:
             print('x ptp', np.ptp(self.MoveDataX))
             print('y ptp', np.ptp(self.MoveDataY))
             # if np.ptp(self.MoveDataX) > ptpNum or np.ptp(self.MoveDataY) > ptpNum:
-            if np.ptp(self.MoveDataX) > ptpNum:
+            if np.ptp(self.MoveDataX) > ptpNum or np.ptp(self.MoveDataY) > ptpNum:
                 avoidFlag = 0
                 print('x',self.MoveDataX)
                 print('y',self.MoveDataY)
@@ -224,7 +222,7 @@ class MyDataProcess:
 
     def LeidaJudgeData(self,MySerial, CarLoca, TargetLoca):
         lock.acquire()
-        print('process acq')
+        #print('process acq')
         deep_data_step1 = np.where(deep_data < 10000,deep_data,0)          #数组切片取最中间，且排除异常值或不考虑值
         if np.mean(deep_data_step1) > 30:#防止数组为空的状态
             for i in range(2):
@@ -234,40 +232,45 @@ class MyDataProcess:
                 CheackStop = np.argwhere(tempData==0)
                 print(Precision)
 
-                if (Precision < 300 or CheackStop.size > 500):
+                if (Precision < 500 or CheackStop.size > 350):
                 #if Precision < 300:
                     avoidFlag = 1
                     print('back')
-                    MySerial.SendDuty(SendNumBack)
-
-                    
+                    self.ClearLineFitData()
                     lock.release()
-                    print('back release')
+                    MySerial.SendDuty(SendNumBack)
+                    #print('back release')
                     time.sleep(0.3)
+                    MySerial.SerialSendData('S')
+                    time.sleep(1)
                     return 0
-                if (Precision < 600):
+                if (Precision < 700):
                     if self.CheakIfReach(CarLoca, TargetLoca, 0.3) == False:
                         avoidFlag = 1
-                        LeftData = deep_data_step1[20:35 , 0:50]
+                        LeftData = deep_data_step1[20:35 , 20:50]
                         LeftPrecision = np.mean(LeftData)
-                        RightData = deep_data_step1[20:35 , 110:160]
+                        RightData = deep_data_step1[20:35 , 110:140]
                         RightPrecision = np.mean(RightData)
                         if (LeftPrecision > RightPrecision):
                             lock.release()
-                            print('turnL release')
+                            #print('turnL release')
                             MySerial.TurnAngle(-30)
                             #print('T left')
-                            
+                            self.ClearLineFitData()
+                            # MySerial.SendDuty(SendNumSlow)
+                            # time.sleep(0.2)
                             return -30
                         else:
                             lock.release()
-                            print('turnR release')
+                            #print('turnR release')
                             MySerial.TurnAngle(30)
                             #print('T Right')
-                            
+                            self.ClearLineFitData()
+                            # MySerial.SendDuty(SendNumSlow)
+                            # time.sleep(0.2)
                             return 30
             #print('zhi zou')
-        print('Go release')
+        #print('Go release')
         lock.release() 
         return 0
 
@@ -304,45 +307,44 @@ class MyQtThread(threading.Thread):
                     self.Ser.SerialSendData('S')
                     self.RecvTargetFlag = False
                     print('arrive')
-
-
-                needAngle = self.DataPro.JudgeDirection(self.CarLocation, self.TargetLocation)
-                self.CarLocation.printSelfData()
-                
-                #获取前进所需角度
-                #print('now',self.angle,'need',needAngle)
-
+                else:
+                    needAngle = self.DataPro.JudgeDirection(self.CarLocation, self.TargetLocation)
+                    self.CarLocation.printSelfData()
                     
-                #print(needAngle)
-                #根据位置到目标的斜率判断是否需要转向
-                TempAngle =  self.DataPro.CheackIfNeedTurn(needAngle, self.angle)
-                if (TempAngle != 0)  and (avoidFlag == 0) :
-                    self.Ser.TurnAngle(TempAngle)          #旋转所需角度
-                    self.angle = needAngle
-                    self.DataPro.ClearLineFitData()
-                
-                GoAngle = self.DataPro.lineFit(8,0.15,self.CarLocation)
-                #直线拟合 判断当前行进方向的真实角度
-                if GoAngle != None:
-                    print('Go',GoAngle)
-                    testAngle = (self.angle - GoAngle) / 2
-                    TempAngle =  self.DataPro.CheackIfNeedTurn(self.angle,GoAngle)
-                    if (TempAngle != 0):         #修正前进角度
-                        self.Ser.TurnAngle(TempAngle)          
-                        self.angle = GoAngle
-                        self.DataPro.ClearLineFitData()
+                    #获取前进所需角度
+                    #print('now',self.angle,'need',needAngle)
 
-                if debugLeida == 1:
-                    #print('judge leida')
-                    tempAngle = self.DataPro.LeidaJudgeData(self.Ser, self.CarLocation, self.TargetLocation)
-                    #判断是否有障碍物需要进行避障
-                    if tempAngle != 0:
-                        self.angle += tempAngle
+                        
+                    #print(needAngle)
+                    #根据位置到目标的斜率判断是否需要转向
+                    TempAngle =  self.DataPro.CheackIfNeedTurn(needAngle, self.angle)
+                    if (TempAngle != 0)  and (avoidFlag == 0) :
+                        self.Ser.TurnAngle(TempAngle)          #旋转所需角度
+                        self.angle = needAngle
                         self.DataPro.ClearLineFitData()
-                        # self.Ser.SendDuty(SendNumSlow)
-                        # time.sleep(0.5)
-                self.Ser.SendDuty(SendNumSlow)
-                print()
+                    
+                    GoAngle = self.DataPro.lineFit(7,0.1,self.CarLocation)
+                    #直线拟合 判断当前行进方向的真实角度
+                    if GoAngle != None:
+                        print('Go',GoAngle)
+                        if abs(self.angle - GoAngle) < 30:
+                            testAngle = (self.angle - GoAngle) / 2
+                            TempAngle =  self.DataPro.CheackIfNeedTurn(self.angle,GoAngle - testAngle)
+                            if (TempAngle != 0):         #修正前进角度
+                                self.Ser.TurnAngle(TempAngle)          
+                                self.angle = GoAngle
+                                self.DataPro.ClearLineFitData()
+
+                    if debugLeida == 1:
+                        #print('judge leida')
+                        tempAngle = self.DataPro.LeidaJudgeData(self.Ser, self.CarLocation, self.TargetLocation)
+                        #判断是否有障碍物需要进行避障
+                        if tempAngle != 0:
+                            self.angle += tempAngle
+                            self.DataPro.ClearLineFitData()
+                            # self.Ser.SendDuty(SendNumSlow)
+                            # time.sleep(0.5)
+                    self.Ser.SendDuty(SendNumSlow)
             time.sleep(0.05)    
             
             
@@ -377,7 +379,7 @@ class MyTcpThread(threading.Thread):
                     
                     # if (tempNum == 9599):
                     #     print('done')
-            print('getData release')
+            #print('getData release')
             lock.release()
             time.sleep(0.05)
             
